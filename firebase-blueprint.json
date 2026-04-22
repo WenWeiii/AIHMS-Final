@@ -1,0 +1,259 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["patient", "caregiver", "admin"] },
+        "language": { "type": "string", "enum": ["ms", "en", "zh"] },
+        "hasCompletedOnboarding": { "type": "boolean" },
+        "assignedPatientId": { "type": "string", "description": "For caregivers, the patient they manage" },
+        "caregiverIds": { "type": "array", "items": { "type": "string" }, "description": "For patients, their caregivers" },
+        "mainCaregiverId": { "type": "string", "description": "Primary contact caregiver UID" },
+        "wearableConnected": { "type": "boolean" },
+        "wearableType": { "type": "string", "enum": ["fitbit", "google-fit", "apple-health"] },
+        "wearableSyncedAt": { "type": "string", "format": "date-time" },
+        "bloodType": { "type": "string" },
+        "allergies": { "type": "string" },
+        
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "houseAddress": { "type": "string" },
+        "dob": { "type": "string", "format": "date" },
+        "conditions": { "type": "string" },
+        "medications": { "type": "string" },
+        "icNumber": { "type": "string" },
+        
+        "fullName": { "type": "string", "description": "Caregiver full name as per IC" },
+        "phoneNumber": { "type": "string" },
+        "relationship": { "type": "string", "enum": ["Family", "Professional Caregiver", "Friend"] },
+        "agencyId": { "type": "string" },
+        "licenseNumber": { "type": "string" },
+        
+        "inviteToken": { "type": "string" },
+        "inviteTokenExpiresAt": { "type": "number" },
+
+        "followerCount": { "type": "number", "default": 0 },
+        "followingCount": { "type": "number", "default": 0 },
+        "bio": { "type": "string", "description": "User short biography" },
+        "latestVitals": { 
+          "type": "object", 
+          "properties": {
+            "heartRate": { "type": "number" },
+            "steps": { "type": "number" },
+            "weight": { "type": "number" },
+            "bloodPressure": { "type": "string" },
+            "triageZone": { "type": "string" },
+            "timestamp": { "type": "string" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Message in the AI assistant chat history",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "model"] },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "analysis": { "type": "object", "description": "AIHMsAnalysis structure" }
+      },
+      "required": ["role", "text", "timestamp"]
+    },
+    "TrustedContact": {
+      "title": "TrustedContact",
+      "description": "Family or caregiver contact for health alerts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "relation": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "alertsEnabled": { "type": "boolean" },
+        "reportsEnabled": { "type": "boolean" }
+      },
+      "required": ["name", "relation", "email"]
+    },
+    "HealthLog": {
+      "title": "HealthLog",
+      "description": "Health metric log with AI analysis",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "weight": { "type": "number" },
+        "bloodPressure": { "type": "string" },
+        "heartRate": { "type": "number" },
+        "steps": { "type": "number" },
+        "sleepHours": { "type": "number" },
+        "mood": { "type": "string" },
+        "notes": { "type": "string" },
+        "triageZone": { "type": "string", "enum": ["Red", "Yellow", "Green", "None"] },
+        "analysis": { "type": "object", "description": "AIHMsAnalysis object" }
+      },
+      "required": ["userId", "timestamp", "triageZone"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Medical or community appointment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "type": { "type": "string", "enum": ["checkup", "follow-up", "specialist", "other"] },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["scheduled", "pending", "cancelled"] },
+        "reminderEnabled": { "type": "boolean" },
+        "locationName": { "type": "string" }
+      },
+      "required": ["userId", "title", "date", "time", "status"]
+    },
+    "CommunityPost": {
+      "title": "CommunityPost",
+      "description": "Post shared in the community feed",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorPhoto": { "type": "string" },
+        "circleId": { "type": "string", "description": "Optional circle ID if post belongs to a circle" },
+        "type": { "type": "string", "enum": ["event", "tip", "milestone"] },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "likes": { "type": "number" },
+        "attendees": { "type": "number" },
+        "location": { "type": "string" },
+        "eventDate": { "type": "string" }
+      },
+      "required": ["authorId", "type", "title", "content", "timestamp"]
+    },
+    "Circle": {
+      "title": "Circle",
+      "description": "A community group for shared interests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "memberCount": { "type": "number" },
+        "createdBy": { "type": "string" },
+        "icon": { "type": "string" },
+        "tasks": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "completed": { "type": "boolean" },
+              "points": { "type": "number" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "createdBy"]
+    },
+    "DirectMessage": {
+      "title": "DirectMessage",
+      "description": "Person-to-person direct message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["text", "image", "system"] }
+      },
+      "required": ["senderId", "text", "timestamp", "type"]
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "User submitted feedback or bug reports",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string", "format": "email" },
+        "content": { "type": "string" },
+        "category": { "type": "string", "enum": ["bug", "suggestion", "other"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["new", "reviewed", "closed"], "default": "new" }
+      },
+      "required": ["userId", "content", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/users/{userId}/healthLogs/{logId}": {
+      "schema": "HealthLog",
+      "description": "User health metric history"
+    },
+    "/users/{userId}/appointments/{apptId}": {
+      "schema": "Appointment",
+      "description": "User scheduled appointments"
+    },
+    "/users/{userId}/trustedContacts/{contactId}": {
+      "schema": "TrustedContact",
+      "description": "User's trusted health circle contacts"
+    },
+    "/users/{userId}/rsvps/{postId}": {
+      "schema": "object",
+      "description": "User's RSVPs to community events"
+    },
+    "/users/{userId}/following/{followingId}": {
+      "schema": "object",
+      "description": "Users this user is following"
+    },
+    "/users/{userId}/followers/{followerId}": {
+      "schema": "object",
+      "description": "Users following this user"
+    },
+    "/users/{userId}/chatHistory/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "User's AI chat interaction history"
+    },
+    "/users/{userId}/joinedCircles/{circleId}": {
+      "schema": "object",
+      "description": "Circles the user has joined"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "DirectMessage",
+      "description": "Messages in a peer-to-peer conversation"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "object",
+      "description": "Metadata for a conversation between two users"
+    },
+    "/communityPosts/{postId}": {
+      "schema": "CommunityPost",
+      "description": "Public community feed posts"
+    },
+    "/circles/{circleId}": {
+      "schema": "Circle",
+      "description": "Community circles"
+    },
+    "/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "User feedback submissions"
+    }
+  }
+}

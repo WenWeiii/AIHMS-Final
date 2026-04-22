@@ -1,0 +1,267 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /_internal/connection_test {
+      allow read: if true;
+    }
+
+    // 3. Primitive Definition (Phase 3)
+    function isSignedIn() { return request.auth != null; }
+    // Relaxed for AI Studio environment unless strictly required by user
+    function isEmailVerified() { return isSignedIn(); } 
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // Path variable hardening
+    function isValidId(id) { 
+      return id is string && id.size() <= 256; 
+    }
+
+    // Admin lookup
+    function isAdmin() { 
+      return isSignedIn() && (
+        request.auth.token.email.lower() == "shumww1@gmail.com" || 
+        request.auth.token.email.lower() == "ongyh123@gmail.com" ||
+        request.auth.token.email == "shumww1@gmail.com" || 
+        request.auth.token.email == "ongyh123@gmail.com" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    // Caregiver sync logic
+    function isAssignedCaregiver(patientId) {
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(patientId)) &&
+         get(/databases/$(database)/documents/users/$(patientId)).data.get('caregiverIds', []).hasAny([request.auth.uid])) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('assignedPatientId', '') == patientId)
+      );
+    }
+
+    function canAccessUserData(userId) {
+      return isOwner(userId) || isAdmin() || isAssignedCaregiver(userId);
+    }
+
+    match /health_data/{logId} {
+      allow read: if isSignedIn() && (isAdmin() || canAccessUserData(resource.data.userId));
+      allow create: if isSignedIn() && canAccessUserData(incoming().userId) && isValidHealthLog(incoming(), incoming().userId);
+      allow delete: if isAdmin();
+    }
+
+    // --- Validation Blueprints (Pillar 2) ---
+
+    function isValidUser(data) {
+      return (!('uid' in data) || data.uid is string) &&
+             (!('email' in data) || data.email is string) &&
+             (!('role' in data) || data.role in ['patient', 'caregiver', 'admin']) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128));
+    }
+
+    function isValidHealthLog(data, userId) {
+      return (data.get('userId', userId) == userId) &&
+             (!('timestamp' in data) || data.timestamp is string) &&
+             (!('triageZone' in data) || data.triageZone in ['Red', 'Yellow', 'Green', 'None']) &&
+             (!('heartRate' in data) || data.heartRate is number) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2048));
+    }
+
+    function isValidAppointment(data, userId) {
+      return data.userId == userId &&
+             data.title is string && data.title.size() <= 256 &&
+             data.status in ['scheduled', 'pending', 'cancelled'];
+    }
+
+    function isValidChatMessage(data) {
+      return data.role in ['user', 'model'] &&
+             data.text is string && data.text.size() <= 5000;
+    }
+
+    function isValidCommunityPostCreate(data) {
+      return (data.authorId == request.auth.uid) &&
+             (data.type in ['event', 'tip', 'milestone']) &&
+             (data.title is string && data.title.size() <= 256) &&
+             (data.content is string && data.content.size() <= 10000) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 256)) &&
+             (!('eventDate' in data) || (data.eventDate is string && data.eventDate.size() <= 50));
+    }
+
+    function isValidCommunityPostUpdate(data) {
+      return (!('authorId' in data) || data.authorId == request.auth.uid) &&
+             (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 200)) &&
+             (!('authorPhoto' in data) || (data.authorPhoto is string && data.authorPhoto.size() <= 1000)) &&
+             (!('type' in data) || data.type in ['event', 'tip', 'milestone']) &&
+             (!('title' in data) || (data.title is string && data.title.size() <= 256)) &&
+             (!('content' in data) || (data.content is string && data.content.size() <= 10000)) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 256)) &&
+             (!('eventDate' in data) || (data.eventDate is string && data.eventDate.size() <= 50));
+    }
+
+    function isValidFeedback(data) {
+      return data.userId == request.auth.uid &&
+             data.userName is string && data.userName.size() <= 200 &&
+             data.content is string && data.content.size() <= 10000 &&
+             data.category is string && data.category.size() <= 50 &&
+             data.timestamp == request.time;
+    }
+
+    function isValidComment(data) {
+      return (data.authorId == request.auth.uid) &&
+             (data.text is string && data.text.size() <= 5000) &&
+             (data.timestamp is string && data.timestamp.size() <= 64);
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn(); // Allow discovery
+      allow list: if isSignedIn(); // Allow "Recommended Users" discovery
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if (
+        ((isOwner(userId) || isAssignedCaregiver(userId) || (existing().role == 'patient' && existing().get('inviteToken', null) != null && incoming().diff(existing()).affectedKeys().hasOnly(['caregiverIds', 'updatedAt', 'inviteToken', 'inviteTokenExpiresAt']) && incoming().caregiverIds.hasAny([request.auth.uid]))) && isValidUser(incoming()) && (
+          // Ensure immutable fields
+          incoming().uid == existing().uid &&
+          incoming().email == existing().email &&
+          incoming().role == existing().role && (
+            // Action: Owner Update
+            (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'photoURL', 'language', 'hasCompletedOnboarding', 'bio', 
+              'bloodType', 'allergies', 'gender', 'houseAddress', 'dob', 'conditions', 'medications', 'icNumber',
+              'fullName', 'phoneNumber', 'relationship', 'agencyId', 'licenseNumber',
+              'wearableConnected', 'wearableType', 'wearableToken', 'wearableSyncedAt', 
+              'latestVitals', 'followingCount', 'followerCount', 
+              'inviteToken', 'inviteTokenExpiresAt', 'mainCaregiverId', 'assignedPatientId', 'caregiverIds',
+              'updatedAt', 'narrationEnabled'
+            ])) ||
+            // Action: Caregiver updating Patient Info
+            (isAssignedCaregiver(userId) && existing().role == 'patient' && incoming().diff(existing()).affectedKeys().hasOnly(['bloodType', 'allergies', 'updatedAt', 'caregiverIds', 'inviteToken', 'inviteTokenExpiresAt'])) ||
+            // Action: Link via Token
+            (existing().role == 'patient' && incoming().diff(existing()).affectedKeys().hasOnly(['caregiverIds', 'updatedAt', 'inviteToken', 'inviteTokenExpiresAt']))
+          )
+        )) || 
+        (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['followerCount'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+
+      match /healthLogs/{logId} {
+        allow read: if canAccessUserData(userId);
+        allow create: if canAccessUserData(userId) && isValidHealthLog(incoming(), userId) && isValidId(logId);
+        allow update: if canAccessUserData(userId) && isValidHealthLog(incoming(), userId) && (
+          // Allow updating any fields validated by isValidHealthLog
+          true
+        );
+        allow delete: if canAccessUserData(userId) || isAdmin();
+      }
+
+      match /appointments/{apptId} {
+        allow read: if canAccessUserData(userId);
+        allow create: if canAccessUserData(userId) && isValidAppointment(incoming(), userId) && isValidId(apptId);
+        allow update: if canAccessUserData(userId) && isValidAppointment(incoming(), userId) && (
+          // Terminal State Locking (Pillar 4)
+          existing().status != 'cancelled' &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'reminderEnabled', 'updatedAt'])
+        );
+        allow delete: if isAdmin();
+      }
+
+      match /chatHistory/{messageId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidChatMessage(incoming()) && isValidId(messageId);
+        // Messages are usually immutable
+        allow delete: if isOwner(userId) || isAdmin();
+      }
+
+      match /trustedContacts/{contactId} {
+        allow read: if canAccessUserData(userId) || isAdmin();
+        allow write: if isOwner(userId) && isValidId(contactId);
+      }
+
+      match /joinedCircles/{circleId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+
+      match /likes/{postId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /rsvps/{postId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /bookmarks/{postId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /following/{targetId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /followers/{followerId} {
+        allow read: if isSignedIn();
+        allow create: if isOwner(followerId);
+        allow delete: if isOwner(followerId) || isOwner(userId);
+      }
+    }
+
+    match /communityPosts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && isValidCommunityPostCreate(incoming()) && isValidId(postId);
+      allow update: if (isOwner(existing().authorId) && isValidCommunityPostUpdate(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content', 'location', 'eventDate', 'updatedAt', 'authorName', 'authorPhoto'])
+      )) || (
+        // Allow likes/rsvps increment (Pillar 7 - usually better via server but here for simplicity)
+        isSignedIn() && incoming().diff(existing()).affectedKeys().hasAny(['likes', 'attendees', 'bookmarksCount', 'commentsCount'])
+      ) || isAdmin();
+      allow delete: if isOwner(existing().authorId) || isAdmin();
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidComment(incoming()) && isValidId(commentId);
+        allow delete: if isOwner(existing().authorId) || isAdmin();
+      }
+    }
+
+    match /circles/{circleId} {
+      allow read: if isSignedIn();
+      allow create: if isEmailVerified() && incoming().createdBy == request.auth.uid && isValidId(circleId);
+      allow update: if isSignedIn() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /conversations/{conversationId} {
+      function isMember() {
+        return isSignedIn() && conversationId.split('_').hasAll([request.auth.uid]);
+      }
+      allow read: if isMember();
+      allow create: if isMember();
+      
+      match /messages/{messageId} {
+        allow read: if isMember();
+        allow create: if isMember() && incoming().senderId == request.auth.uid && isValidId(messageId);
+      }
+    }
+
+    match /feedback/{feedbackId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn() && isValidFeedback(incoming()) && isValidId(feedbackId);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Default catch-all (Pillar 6/8)
+    match /{path=**}/healthLogs/{logId} {
+      allow list: if isAdmin(); // Only admins can list across all users
+    }
+    match /{path=**}/appointments/{apptId} {
+      allow list: if isAdmin(); // Only admins can list across all users
+    }
+  }
+}

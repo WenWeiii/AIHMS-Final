@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --font-headline: "Public Sans", sans-serif;
+  --font-body: "Public Sans", sans-serif;
+  --font-label: "Public Sans", sans-serif;
+
+  --color-primary: #00440c;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #195c1f;
+  --color-on-primary-container: #ffffff;
+  --color-primary-fixed: #d9e7cd;
+  --color-primary-fixed-dim: #bdcbb2;
+
+  --color-secondary: #755754;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #dfe5d6;
+  --color-on-secondary-container: #795b58;
+
+  --color-tertiary: #4e3500;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #ffdeaa;
+  --color-on-tertiary-container: #4e3500;
+  --color-tertiary-fixed: #ffdeaa;
+
+  --color-surface: #fef9f1;
+  --color-on-surface: #1d1c17;
+  --color-surface-variant: rgba(231, 226, 218, 0.6);
+  --color-on-surface-variant: #4e3500;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f8f3eb;
+  --color-surface-container: #f2ede4;
+  --color-surface-container-high: #ece7de;
+  --color-surface-container-highest: #e7e2da;
+  
+  --color-outline: #757870;
+  --color-outline-variant: rgba(197, 200, 190, 0.15);
+
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+}
+
+@layer base {
+  body {
+    @apply bg-surface font-body text-on-surface antialiased;
+  }
+  
+  h1, h2, h3, h4 {
+    @apply font-headline tracking-[-0.02em];
+  }
+}
+
+.glass-nav {
+  background: rgba(231, 226, 218, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.signature-gradient {
+  background: var(--signature-gradient, linear-gradient(135deg, #00440c 0%, #195c1f 100%));
+}
+
+.shadow-ambient {
+  box-shadow: 0 8px 32px 0 var(--shadow-ambient-color, rgba(0, 68, 12, 0.08));
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.mirror {
+  transform: scaleX(-1);
+}

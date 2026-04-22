@@ -1,0 +1,10 @@
+{
+  "name": "Remix: Remix: AIHMs Guardian",
+  "description": "Advanced Agentic AI geriatric pre-triage and health monitoring assistant for the Malaysian healthcare ecosystem.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}
